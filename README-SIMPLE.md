@@ -179,6 +179,7 @@ OK -> .../build/spotify-wear-api25.apk
 | Pantalla en negro sin fin | El servidor ya no da datos (cliente viejo) | Estás usando el 8.4.84; usa el 9.0.40 con este repo |
 | `No such file: tools/baksmali.jar` | No ejecutaste el setup | `./scripts/setup.sh` |
 | `no encuentro build-tools` | Falta el Android SDK | `brew install android-commandlinetools` o define `BT=/ruta/build-tools/35.0.0` |
+| **El reloj se reinicia solo** (con la app en segundo plano) | Bug del ROM (watchdog del kernel), no de la app | `./scripts/diag-reboot.sh` lo confirma. Mira la sección 6.1 |
 
 Para ver el error exacto de un crash:
 
@@ -187,6 +188,35 @@ adb logcat -c
 adb shell am start -n com.spotify.music/com.spotify.wear.main.MainActivity
 adb logcat -d | grep -A 20 "FATAL EXCEPTION"
 ```
+
+### 6.1 "Se me reinicia el reloj"
+
+**No es Spotify.** Lo comprobé con datos del propio reloj: el reinicio lo provoca el
+**watchdog** del chip (el "perro guardián" que resetea cuando algo se cuelga), por bugs
+del kernel del ROM que ya existían antes de instalar la app. Un crash de app cierra la app;
+no reinicia el reloj.
+
+Compruébalo tú mismo:
+
+```bash
+./scripts/diag-reboot.sh
+```
+
+Te dirá el motivo del último reinicio y traducirá el fallo del kernel. Lo que suele salir:
+
+`ipt_do_table` / `nf_conntrack` → bug de red al entrar en reposo (`suspend`)
+`i2c_dw_xfer` / `max170` → bug del driver de batería
+`page_alloc` → el reloj se quedó sin memoria (tiene solo 455 MB)
+
+Qué reduce las probabilidades (de más a menos útil):
+
+1. **No dejes Spotify abierto de fondo mientras duerme el reloj**:
+   `adb shell am force-stop com.spotify.music` (libera ~70 MB y cierra sus conexiones).
+2. **WiFi apagada** cuando no estés escuchando (Bluetooth gasta menos y no dispara el bug de red).
+3. **Usa el modo Offline** (canciones descargadas): menos conexiones abiertas.
+4. Cuantas menos apps de fondo (GMS, watchfaces), mejor: el reloj va justo de RAM.
+
+Detalle técnico completo en [`docs/FINDINGS.md`](docs/FINDINGS.md#10-el-reloj-se-reinicia-solo--no-es-la-app).
 
 ---
 
@@ -202,7 +232,10 @@ No hay motivo: usas la app oficial de Spotify, solo con parches de compatibilida
 No. Solo la primera vez, para autorizar. Después el reloj guarda la sesión.
 
 **¿Funciona sin conexión / descarga canciones?**
-En teoría sí (la app tiene modo offline), pero no está probado en este reloj.
+En teoría sí (la app tiene modo offline), pero no está probado en este reloj. Ojo: el modo offline también ayuda a que el reloj no se reinicie (menos conexiones abiertas, ver 6.1).
+
+**¿Se reinicia el reloj por culpa de la app?**
+No. El reloj tiene un bug de kernel (watchdog) que ya se daba antes de instalar Spotify; la app solo lo hace más probable porque consume RAM y mantiene conexiones abiertas. Detalle y mitigaciones en la sección 6.1.
 
 **¿Y el sonido?**
 Por Bluetooth, emparejando auriculares al reloj. La reproducción por el altavoz del reloj no está probada.

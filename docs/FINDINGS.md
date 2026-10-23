@@ -209,3 +209,66 @@ adb logcat -d | grep -E 'FATAL|NoSuchMethod|NoClassDefFound|VerifyError'
 4. Eliminar del APK final las ABIs no-x86 y los recursos `*-v26` no usados (reduce ~40 MB a ~15 MB).
 5. Comprobar `AudioTrack`/códecs: en x86 sin NEON el playback usa rutas software; puede necesitar ajustar el buffer.
 
+---
+
+## 10. "El reloj se reinicia solo" — NO es la app
+
+Síntoma reportado: con Spotify en segundo plano, al rato **el reloj se reinicia**.
+Investigado el 2026-10-23 con `scripts/diag-reboot.sh`. **El culpable es el ROM.**
+
+### 10.1 Evidencia
+
+| Prueba | Resultado |
+|---|---|
+| `ro.boot.bootreason` | `watchdog` → lo resetea el perro guardián del SoC, no un crash de app |
+| Historial `SYSTEM_BOOT` en dropbox | **16 arranques**; 15 de ellos **antes** de instalar Spotify (instalado 23-oct 00:53) |
+| `dmesg-ramoops-0` (pstore) | `Oops#1` con stack `ipt_do_table → nf_conntrack_in → tcp_v4_send_synack → tcp_rtx_synack → reqsk_timer_handler`, disparado **dentro de `suspend_enter`** |
+| `console-ramoops-0` | `WARNING … i2c-designware-core.c:1265 i2c_dw_xfer` desde `max17042_evt_worker` (batería, en resume) |
+| `console-ramoops-0` | `WARNING … mm/page_alloc.c:3032 __alloc_pages_nodemask` desde `dhd_dpc` (driver WiFi, `allocate_slab`) |
+| RAM | `MemTotal: 455 MB`, `MemFree: ~18 MB`, swap zram 307 MB con ~70 MB usados |
+
+### 10.2 Cadena causal
+
+1. El reloj (Intel Merrifield, kernel 4.4.20, 455 MB de RAM) vive al límite de memoria.
+2. Con Spotify en background quedan ~18 MB libres; el driver WiFi (`dhd_dpc`) no consigue
+   asignar slabs en contexto atómico → `WARNING` en `page_alloc.c`.
+3. Al apagarse la pantalla el sistema entra en `suspend`. Cualquier socket TCP vivo
+   (Spotify mantiene 3 conexiones establecidas) deja temporizadores pendientes;
+   un `reqsk_timer_handler` dispara en pleno `suspend_enter` → `ip_output` → netfilter
+   → **Oops del kernel en `ipt_do_table`**.
+4. El SoC se queda colgado → el watchdog de hardware (SCU) resetea el reloj
+   (`ro.boot.bootreason=watchdog`).
+
+Ninguno de los tres `WARNING`/`Oops` está en código de la app: son bugs del kernel del ROM
+que ya existían (se reiniciaba igual sin Spotify instalado).
+
+### 10.3 Qué se puede hacer (de más a menos efectivo)
+
+1. **No dejar sockets abiertos al dormir**: modo *Offline* (descargas) o cerrar Spotify con
+   `adb shell am force-stop com.spotify.music` antes de quitarte el reloj. Con la app cerrada
+   se liberan ~70 MB y desaparecen los temporizadores TCP.
+2. **WiFi apagada cuando no escuches** (solo Bluetooth): sin red no hay `ipt_do_table`
+   ni `dhd_dpc` en el suspend.
+3. **Liberar RAM**: cuantas menos cosas corran de fondo (GMS, watchfaces, apps), menos
+   probable es el fallo de asignación de páginas.
+4. Arreglo de verdad: kernel/ROM parcheado (fuera del alcance de este repo).
+
+### 10.4 Cómo comprobarlo en tu reloj
+
+```bash
+./scripts/diag-reboot.sh
+```
+
+Lee `ro.boot.bootreason`, el historial de arranques, el `pstore` del último cuelgue y
+traduce el stack a lenguaje claro. Requiere `adb`; con root (Magisk) da el informe completo.
+
+### 10.5 Descartado con datos
+
+* **No** es un crash de la app: un `FATAL EXCEPTION` mata el proceso, no reinicia el reloj.
+* **No** lo causan los parches: `classes.dex` es idéntico al que arranca y loguea bien; el
+  `Oops` es del kernel y el historial de reinicios es anterior a la instalación.
+* **No** es el `system_server_crash` de `02:15` (`ActivityNotFoundException: ACTION_ASSIST`
+  al mantener pulsado el botón de encendido): eso solo reinicia `system_server`, no el reloj,
+  y es otro bug conocido del ROM. Ver `docs/FINDINGS.md` y el issue del repo si quieres
+  evitarlo: no dejes pulsado el botón de encendido.
+

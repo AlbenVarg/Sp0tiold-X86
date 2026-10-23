@@ -18,6 +18,7 @@ El cliente de Wear OS moderno exige `minSdkVersion 28` (Android 9). Este repo do
 # -> build/spotify-wear-api25.apk  (minSdk 25, desugared, firmado)
 adb install -r build/spotify-wear-api25.apk
 adb shell am start -n com.spotify.music/com.spotify.wear.main.MainActivity
+./scripts/diag-reboot.sh                            # si el reloj se reinicia solo (no es la app)
 ```
 
 ---
@@ -216,6 +217,14 @@ Otros frentes:
 - Verificar que la **home/biblioteca** cargan (endpoints `spclient`/`gew` del cliente moderno sí existen).
 - Reproducción real por Bluetooth/A2DP en x86 (códecs software, sin aceleración).
 - Reducir tamaño: quitar ABIs `arm64-v8a`, `armeabi-v7a`, `x86_64` del APK final.
+
+### Reinicios del reloj: no es la app
+
+El NBRiq se reinicia solo (con o sin Spotify) por bugs del **kernel del ROM**:
+`Oops` en `ipt_do_table` dentro de `suspend_enter`, `WARNING` en `i2c_dw_xfer` y fallos de
+`page_alloc` en el driver WiFi (455 MB de RAM, ~18 MB libres). `ro.boot.bootreason=watchdog`.
+Diagnóstico reproducible con [`scripts/diag-reboot.sh`](scripts/diag-reboot.sh); análisis
+completo en [`docs/FINDINGS.md` §10](docs/FINDINGS.md#10-el-reloj-se-reinicia-solo--no-es-la-app).
 
 ---
 
