@@ -6,7 +6,7 @@ El cliente de Wear OS moderno exige `minSdkVersion 28` (Android 9). Este repo do
 
 > 🧸 **¿Solo quieres instalarlo y no te interesa el cómo?** → **[Guía fácil paso a paso (para dummies)](README-SIMPLE.md)**
 
-> **Estado: funciona de punta a punta salvo el sonido, que necesita Bluetooth.** Arranca, empareja, inicia sesión, **se conserva el login al reinstalar** y carga home/biblioteca (verificado en un NBRiq: "Good morning" + Liked Songs + playlists). La reproducción no se ha podido oír todavía porque el reloj no tiene altavoz útil y Spotify pide un dispositivo Bluetooth (los auriculares del usuario). Audio focus **no** es un problema: la app ya trae la rama API 25.
+> **Estado: funciona.** En un NBRiq real (x86, Android 7.1.1): arranca, empareja, inicia sesión, **se conserva el login al reinstalar**, carga home/biblioteca/buscador y **reproduce** (`state=3`, con el audio focus concedido por la vía antigua: `Y5.c`). Capturas del reloj en [`docs/img/`](docs/img/). Lo único sin verificar es el **sonido audible**: el reloj no tiene altavoz utilizable y Spotify pide un dispositivo Bluetooth.
 
 ---
 
@@ -42,6 +42,31 @@ Mantenimiento desde el ordenador (todo opcional):
 | `scripts/spotify-sleep.sh` | modo dormir: `force-stop` de Spotify + WiFi off, y vuelta atrás |
 | `scripts/diag-reboot.sh` | informe de reinicios: `bootreason`, historial, `pstore`, stack traducido |
 | `scripts/reinstall-keep-data.sh` | reinstala el APK conservando la sesión (root + `magiskpolicy`); `--rollback` |
+
+---
+
+## Capturas
+
+Todas tomadas de un **NBRiq real** (400×400, x86, Android 7.1.1) con el APK de
+`build/spotify-wear-api25.apk` (16 MB, solo `lib/x86`), vía `adb exec-out screencap`.
+Ficheros en [`docs/img/`](docs/img/).
+
+| Ahora suena (`state=3`) | El progreso avanza | Home ("Good morning", playlists difuminadas) |
+|---|---|---|
+| ![Reproduciendo](docs/img/01-reproduciendo.png) | ![Progreso](docs/img/02-progreso.png) | ![Home](docs/img/03-home.png) |
+
+| Your Library | Playlists | Lista de canciones |
+|---|---|---|
+| ![Biblioteca](docs/img/04-pagina.png) | ![Playlists](docs/img/05-playlists.png) | ![Canciones](docs/img/07-canciones.png) |
+
+| Canción nueva al tocarla | Teclado de búsqueda | Resultados |
+|---|---|---|
+| ![Otra canción](docs/img/08-cancion-nueva.png) | ![Teclado](docs/img/11-teclado-sugerencias.png) | ![Resultados](docs/img/12-resultados.png) |
+
+Lo que demuestran: el dex parcheado corre en ART 7.1 sin `NoSuchMethodError`, la sesión
+sigue viva tras reinstalar el APK, el buscador hace peticiones reales a los endpoints
+modernos, y el audio focus se pide por la **sobrecarga antigua** (`Y5.c`) — la prueba de
+que el parche de `AudioFocusRequest` era innecesario.
 
 ---
 
@@ -237,10 +262,10 @@ Los tres riesgos de API 26+ que quedaban **ya están resueltos o descartados con
 
 Lo que queda por probar:
 
-- **Sonido real**: el NBRiq no tiene altavoz utilizable (`dumpsys audio` solo expone
-  `speaker`, pero Spotify abre los ajustes de Bluetooth al elegir "This watch"). Hay que
-  emparejar auriculares/manos libres y comprobar que suena, que no hay `AudioTrack` en
-  error y que el `PlaybackState` pasa a `state=3`.
+- **Sonido audible**: la reproducción funciona (`state=3`, posición avanzando, focus
+  concedido), pero el NBRiq no tiene altavoz utilizable (Spotify abre los ajustes de
+  Bluetooth al elegir "This watch"). Con auriculares emparejados hay que confirmar que se
+  oye y que no aparecen errores de `AudioTrack`.
 - Ajuste fino del buffer de `AudioTrack` en x86 sin NEON (solo si se oyen cortes).
 - A/B de estabilidad del watchdog: una noche con `spotify-sleep.sh on` vs una normal,
   comparando el número de arranques con `./scripts/diag-reboot.sh`.

@@ -164,6 +164,21 @@ OK -> .../build/spotify-wear-api25.apk
 
 > 📌 **Apunta el código rápido**: caduca en unos minutos. Y si la app se cierra sola al meterlo, mira la sección siguiente.
 
+### ¿Cómo se ve cuando funciona?
+
+Capturas de un NBRiq real (x86, Android 7.1.1) con el APK parcheado:
+
+| Reproduciendo | Progreso | Home |
+|---|---|---|
+| ![Reproduciendo](docs/img/01-reproduciendo.png) | ![Progreso](docs/img/02-progreso.png) | ![Home (playlists difuminadas)](docs/img/03-home.png) |
+
+| Biblioteca | Lista de canciones | Buscar |
+|---|---|---|
+| ![Biblioteca](docs/img/04-pagina.png) | ![Canciones](docs/img/07-canciones.png) | ![Buscar](docs/img/12-resultados.png) |
+
+Si ves la carátula, el tiempo avanzando y la lista de canciones, **está funcionando**.
+Para oírlo necesitas unos auriculares Bluetooth: el reloj no tiene altavoz.
+
 ---
 
 ## 6. Si algo falla

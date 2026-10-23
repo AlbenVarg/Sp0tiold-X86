@@ -177,6 +177,22 @@ Conclusión: **no hay que parchear nada** para audio focus en API 25. Si algún
 día apareciera el crash, la ruta sería reescribir el `Builder` a una clase
 `nbrt/compat/AfRequest` propia, pero hoy sería trabajo tirado.
 
+**Confirmado en el reloj** (23-oct, reproduciendo desde "Liked Songs"):
+
+```bash
+$ adb shell dumpsys media_session | grep -m1 PlaybackState
+  state=PlaybackState {state=3, position=126699, speed=1.0, ...}
+
+$ adb shell dumpsys audio | sed -n '/Audio Focus stack/,+2p'
+Audio Focus stack entries (last is top of stack):
+  source:... -- pack: com.spotify.music -- client: android.media.AudioManager@a84352cY5.c@32721ad
+  -- gain: GAIN -- flags: -- loss: none -- uid: 10046
+  -- attr: AudioAttributes: usage=1 content=2 flags=0x0 tags= bundle=null
+```
+
+`state=3` es `PLAYING`, la posición avanza (4335 → 126699 ms) y el focus lo tiene
+`Y5.c` — exactamente la clase de la rama legacy. Ni un `NoSuchMethodError`.
+
 ### 5.6 `java.lang.invoke`: código muerto en Android
 
 Todo `java.lang.invoke` del APK está en `Lah/K;` (6 referencias:
@@ -241,7 +257,7 @@ adb logcat -d | grep -E 'FATAL|NoSuchMethod|NoClassDefFound|VerifyError'
 | Sobrevive al login (crash `NotificationChannel`) | ✅ verificado en el reloj |
 | Home / biblioteca | ✅ cargan ("Good morning", Liked Songs, playlists) |
 | Sesión conservada tras reinstalar el APK slim | ✅ (ver §11) |
-| Reproducción | ⏳ `AudioFocus` **no** es un problema (5.5); el reloj no tiene altavoz útil y pide Bluetooth: falta probar con auriculares |
+| Reproducción | ✅ `state=3` (PLAYING) con audio focus en `Y5.c`; posición avanza. Capturas en [`docs/img/`](docs/img/) |
 | APK slim (solo x86) | ✅ `KEEP_ABIS=x86`, 41,7 MB → 16 MB, instalado |
 | Apps de Google prescindibles | ✅ desactivadas (`scripts/debloat.sh`) |
 
