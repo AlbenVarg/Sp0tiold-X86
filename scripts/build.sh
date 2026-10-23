@@ -11,6 +11,8 @@
 #   BT           dir de android build-tools (zipalign/apksigner/dexdump/d8)
 #   KS           keystore (se crea si no existe)
 #   OUT          APK de salida
+#   KEEP_ABIS    ABIs a conservar, separadas por comas (def: x86; "" = todas).
+#                El NBRiq es x86 puro: dejando solo x86 el APK baja de ~42 a ~18 MB.
 set -euo pipefail
 
 SRC="${1:?uso: build.sh <spotify-wear.apk> [minSdk]}"
@@ -97,7 +99,7 @@ grep -q "DEX version" "$WORK/dexdump.txt" || { echo "ERROR: dexdump no pudo abri
 # --------------------------------------------------- 6) repack + firmar
 step "6/6 repack + zipalign + apksigner"
 python3 "$HERE/scripts/repack_apk2.py" "$WORK/step1-minsdk.apk" "$WORK/unaligned.apk" \
-        "$WORK/classes-patched.dex" "$WORK/dexout/classes.dex"
+        "$WORK/classes-patched.dex" "$WORK/dexout/classes.dex" "${KEEP_ABIS-x86}"
 "$BT/zipalign" -f -p 4 "$WORK/unaligned.apk" "$OUT"
 if [ ! -f "$KS" ]; then
   keytool -genkeypair -keystore "$KS" -alias android -storepass android \

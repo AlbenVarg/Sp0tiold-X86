@@ -6,7 +6,7 @@ El cliente de Wear OS moderno exige `minSdkVersion 28` (Android 9). Este repo do
 
 > 🧸 **¿Solo quieres instalarlo y no te interesa el cómo?** → **[Guía fácil paso a paso (para dummies)](README-SIMPLE.md)**
 
-> **Estado: funcional en fase de pruebas.** Arranca, genera código de emparejamiento y completa el login. Quedan por verificar home/biblioteca y reproducción (ver [Pendiente](#pendiente)).
+> **Estado: funciona de punta a punta salvo el sonido, que necesita Bluetooth.** Arranca, empareja, inicia sesión, **se conserva el login al reinstalar** y carga home/biblioteca (verificado en un NBRiq: "Good morning" + Liked Songs + playlists). La reproducción no se ha podido oír todavía porque el reloj no tiene altavoz útil y Spotify pide un dispositivo Bluetooth (los auriculares del usuario). Audio focus **no** es un problema: la app ya trae la rama API 25.
 
 ---
 
@@ -15,11 +15,33 @@ El cliente de Wear OS moderno exige `minSdkVersion 28` (Android 9). Este repo do
 ```bash
 ./scripts/setup.sh                                  # una sola vez: baja las herramientas
 ./scripts/build.sh "com.spotify.music_9.0.40.386-..._minAPI28(x86).apk"
-# -> build/spotify-wear-api25.apk  (minSdk 25, desugared, firmado)
+# -> build/spotify-wear-api25.apk  (minSdk 25, desugared, firmado, solo lib/x86: ~16 MB)
 adb install -r build/spotify-wear-api25.apk
 adb shell am start -n com.spotify.music/com.spotify.wear.main.MainActivity
-./scripts/diag-reboot.sh                            # si el reloj se reinicia solo (no es la app)
 ```
+
+Mantenimiento desde el ordenador (todo opcional):
+
+```bash
+./scripts/spotify-sleep.sh on        # quitar el reloj: cierra Spotify + apaga WiFi
+./scripts/spotify-sleep.sh off       # ponértelo: WiFi + abre Spotify
+./scripts/debloat.sh list            # apps de Google que sobran (disable/restore)
+./scripts/diag-reboot.sh             # si el reloj se reinicia solo (no es la app)
+./scripts/reinstall-keep-data.sh build/spotify-wear-api25.apk   # cambia el APK sin perder el login (root)
+```
+
+---
+
+## Scripts
+
+| Script | Para qué |
+|---|---|
+| `scripts/setup.sh` | descarga `baksmali`/`smali`/`desugar` y crea el keystore |
+| `scripts/build.sh` | pipeline completo (minSdk, desugar, parches, repack, firma). `KEEP_ABIS=""` conserva todas las ABIs |
+| `scripts/debloat.sh` | desactiva apps de Google prescindibles (reversible) y libera RAM |
+| `scripts/spotify-sleep.sh` | modo dormir: `force-stop` de Spotify + WiFi off, y vuelta atrás |
+| `scripts/diag-reboot.sh` | informe de reinicios: `bootreason`, historial, `pstore`, stack traducido |
+| `scripts/reinstall-keep-data.sh` | reinstala el APK conservando la sesión (root + `magiskpolicy`); `--rollback` |
 
 ---
 
@@ -203,20 +225,25 @@ adb shell am start -n com.spotify.music/com.spotify.wear.main.MainActivity
 
 ## Pendiente
 
-Riesgos conocidos, aún **sin parchear** (saltarán más adelante en el flujo):
+Los tres riesgos de API 26+ que quedaban **ya están resueltos o descartados con datos**
+(detalle en [`docs/FINDINGS.md` §5.5 y §5.6](docs/FINDINGS.md#55-audiofocusrequest-falso-positivo)):
 
-| Símbolo API 26+ | Dónde | Riesgo |
-|---|---|---|
-| `AudioFocusRequest` / `AudioManager.requestAudioFocus(AudioFocusRequest)` | capa de reproducción | **Alto**: crash al darle play. Sustituible por la sobrecarga antigua `requestAudioFocus(listener, streamType, durationHint)`. |
-| `java.lang.invoke.MethodHandles` / `LambdaMetafactory` | `ah/K` (Kotlin reflection) | **Medio** |
-| `AdaptiveIconDrawable` | `u1/d` | **Bajo**: solo iconos adaptativos del launcher. |
-| `Notification.Builder.setChannelId` | notificaciones | Bajo: no-op en <26, comprobar que no revienta. |
+| Símbolo API 26+ | Estado real |
+|---|---|
+| `AudioFocusRequest` / `requestAudioFocus(AudioFocusRequest)` | ✅ **no aplica**: `W5/c.f()` comprueba `SDK_INT < 26` y usa `requestAudioFocus(listener, streamType, durationHint)` |
+| `java.lang.invoke.MethodHandles` | ✅ **inofensivo**: solo en `ah/K`, y `ah/K.<clinit>` elige `ah/J` (reflexión clásica) porque `java.vm.name == "Dalvik"` en Android |
+| `AdaptiveIconDrawable` | 🟡 **bajo**: `u1/d`, solo iconos adaptativos del launcher |
+| `Notification.Builder.setChannelId` | ✅ no-op en <26, verificado en el reloj |
 
-Otros frentes:
+Lo que queda por probar:
 
-- Verificar que la **home/biblioteca** cargan (endpoints `spclient`/`gew` del cliente moderno sí existen).
-- Reproducción real por Bluetooth/A2DP en x86 (códecs software, sin aceleración).
-- Reducir tamaño: quitar ABIs `arm64-v8a`, `armeabi-v7a`, `x86_64` del APK final.
+- **Sonido real**: el NBRiq no tiene altavoz utilizable (`dumpsys audio` solo expone
+  `speaker`, pero Spotify abre los ajustes de Bluetooth al elegir "This watch"). Hay que
+  emparejar auriculares/manos libres y comprobar que suena, que no hay `AudioTrack` en
+  error y que el `PlaybackState` pasa a `state=3`.
+- Ajuste fino del buffer de `AudioTrack` en x86 sin NEON (solo si se oyen cortes).
+- A/B de estabilidad del watchdog: una noche con `spotify-sleep.sh on` vs una normal,
+  comparando el número de arranques con `./scripts/diag-reboot.sh`.
 
 ### Reinicios del reloj: no es la app
 

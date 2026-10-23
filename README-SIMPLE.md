@@ -210,13 +210,32 @@ Te dirá el motivo del último reinicio y traducirá el fallo del kernel. Lo que
 
 Qué reduce las probabilidades (de más a menos útil):
 
-1. **No dejes Spotify abierto de fondo mientras duerme el reloj**:
-   `adb shell am force-stop com.spotify.music` (libera ~70 MB y cierra sus conexiones).
-2. **WiFi apagada** cuando no estés escuchando (Bluetooth gasta menos y no dispara el bug de red).
+1. **Modo dormir**: antes de quitarte el reloj,
+   `./scripts/spotify-sleep.sh on` (cierra Spotify y apaga la WiFi). Al ponértelo,
+   `./scripts/spotify-sleep.sh off` (enciende la WiFi y abre Spotify).
+2. **No dejes Spotify abierto de fondo**: `adb shell am force-stop com.spotify.music`
+   libera ~70 MB y cierra sus conexiones (es lo que hace el modo dormir).
 3. **Usa el modo Offline** (canciones descargadas): menos conexiones abiertas.
-4. Cuantas menos apps de fondo (GMS, watchfaces), mejor: el reloj va justo de RAM.
+4. **Cuanta menos cosa de fondo, mejor**: `./scripts/debloat.sh disable` apaga apps de
+   Google que el reloj no necesita. Se puede deshacer con `./scripts/debloat.sh restore`.
 
 Detalle técnico completo en [`docs/FINDINGS.md`](docs/FINDINGS.md#10-el-reloj-se-reinicia-solo--no-es-la-app).
+
+### 6.2 Quiero cambiar el APK sin volver a emparejar
+
+Si ya tienes sesión y quieres probar una versión nueva, **no** hagas `adb uninstall`
+(perderías el login). Con root:
+
+```bash
+./scripts/reinstall-keep-data.sh build/spotify-wear-api25.apk
+# ¿algo salió mal? vuelve atrás:
+./scripts/reinstall-keep-data.sh --rollback
+```
+
+Guarda los datos en `$TMPDIR/spotify-data.tgz` y el APK viejo en `$TMPDIR/sp0tiold-old.apk`,
+reinstala y devuelve los datos con el uid y el contexto SELinux correctos. Cómo funciona
+por dentro (y los tres tropiezos con `tar`, `cp -a` y SELinux) está en
+[`docs/FINDINGS.md` §11](docs/FINDINGS.md#11-cambiar-el-apk-sin-perder-la-sesión-con-root).
 
 ---
 

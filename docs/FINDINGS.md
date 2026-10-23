@@ -116,8 +116,8 @@ Búsqueda de todos los símbolos con `apiLevel > 25` usados en el dex:
 | `Context.startForegroundService` | 26 | `r1.1/d` (WorkManager) |
 | `VibrationEffect.createPredefined` / `createOneShot` | 26 | `Kc/F` (llamado desde ~10 clases de UI) |
 | `Vibrator.vibrate(VibrationEffect)` | 26 | `Kc/F` |
-| `AudioFocusRequest` / `requestAudioFocus(AudioFocusRequest)` | 26 | capa de reproducción (**pendiente**) |
-| `java.lang.invoke.MethodHandles` | 26 | `ah/K` (Kotlin reflection) |
+| `AudioFocusRequest` / `requestAudioFocus(AudioFocusRequest)` | 26 | ✅ **no aplica**: la app ya trae rama para <26 (ver 5.5) |
+| `java.lang.invoke.MethodHandles` | 26 | ✅ **inofensivo**: solo en `ah/K`, que en Android no se instancia (ver 5.6) |
 | `AdaptiveIconDrawable` | 26 | `u1/d` (iconos) |
 
 ### 5.3 Estrategia de parcheo de call sites
@@ -159,6 +159,47 @@ Trampa: devolver `null` donde Kotlin espera no-null dispara `IllegalStateExcepti
 
 Trampa 2: en `Q3/d` (comprobación de disponibilidad de Google Play Services) la rama `else` hace `channel.getName()` → `NoSuchMethodError` sobre nuestro `Object`. Se parchea el salto: `if-nez v0, :cond_10e` → `goto :cond_11e`.
 
+### 5.5 `AudioFocusRequest`: falso positivo
+
+`AudioFocusRequest` (y su `Builder`) son API 26+, pero **Spotify ya trae el camino
+antiguo** y lo elige en tiempo de ejecución:
+
+* `W5/c;->f()I` hace `sget Landroid/os/Build$VERSION;->SDK_INT:I` y
+  `const/16 v4, 0x1a; if-lt v1, v4, :cond_56`. Si `SDK_INT < 26` salta a
+  `:cond_56`, donde está `invoke-virtual {v1, v0, v5, v9}, Landroid/media/AudioManager;->requestAudioFocus(Landroid/media/AudioManager$OnAudioFocusChangeListener;II)I`
+  (sobrecarga de API 8 con `streamType` + `durationHint`).
+* `La3/i;->w(LX5/b;)I` es la rama 26+ (usa `AudioFocusRequest` y
+  `LPc/X;->s(...)` para construirlo). Solo se ejecuta si `SDK_INT >= 26`.
+* `abandonAudioFocus` también está duplicado: `W5/c` línea ~424 usa la versión
+  antigua con listener.
+
+Conclusión: **no hay que parchear nada** para audio focus en API 25. Si algún
+día apareciera el crash, la ruta sería reescribir el `Builder` a una clase
+`nbrt/compat/AfRequest` propia, pero hoy sería trabajo tirado.
+
+### 5.6 `java.lang.invoke`: código muerto en Android
+
+Todo `java.lang.invoke` del APK está en `Lah/K;` (6 referencias:
+`MethodHandles.lookup()`, `Lookup.unreflectSpecial`, `MethodHandle.bindTo`,
+`invokeWithArguments`). Es el helper de "invocar default methods" de Kotlin/Java 8.
+
+`Lah/K;-><clinit>` decide la implementación así:
+
+```
+const-string v0, "java.vm.name"
+invoke-static {v0}, Ljava/lang/System;->getProperty(...)
+const-string v1, "Dalvik"
+invoke-virtual {v1, v0}, Ljava/lang/String;->equals(...)   # ¿"Dalvik" == vm.name?
+if-eqz v0, :cond_14        # distinto de Dalvik -> new Lah/K (con MethodHandles)
+:cond_14  new-instance v0, Lah/J   # "Dalvik" -> Lah/J (reflexión clásica)
+```
+
+Y en Android `java.vm.name` vale **`"Dalvik"`** tanto en Dalvik como en ART
+(por compatibilidad). Es decir: en el reloj se usa `Lah/J`, que **no contiene
+ni una referencia a `java.lang.invoke`** (`grep -c 'java/lang/invoke' ah/J.smali`
+→ 0). El código con `MethodHandles` solo se ejecutaría en una JVM de escritorio.
+Riesgo real: ninguno.
+
 ## 6. Empaquetado
 
 * `repack_apk2.py` sustituye `classes.dex` y añade `classes2.dex`, **eliminando** `META-INF/*.RSA|SF|MF` (la firma original deja de ser válida).
@@ -197,17 +238,19 @@ adb logcat -d | grep -E 'FATAL|NoSuchMethod|NoClassDefFound|VerifyError'
 | Arranca sin crash | ✅ |
 | Genera código de emparejamiento | ✅ |
 | Completa login (servidor acepta) | ✅ |
-| Sobrevive al login (crash `NotificationChannel`) | ✅ parcheado, pendiente de re-verificar |
-| Home / biblioteca | ❓ sin verificar |
-| Reproducción | ❌ falta `AudioFocusRequest` |
+| Sobrevive al login (crash `NotificationChannel`) | ✅ verificado en el reloj |
+| Home / biblioteca | ✅ cargan ("Good morning", Liked Songs, playlists) |
+| Sesión conservada tras reinstalar el APK slim | ✅ (ver §11) |
+| Reproducción | ⏳ `AudioFocus` **no** es un problema (5.5); el reloj no tiene altavoz útil y pide Bluetooth: falta probar con auriculares |
+| APK slim (solo x86) | ✅ `KEEP_ABIS=x86`, 41,7 MB → 16 MB, instalado |
+| Apps de Google prescindibles | ✅ desactivadas (`scripts/debloat.sh`) |
 
 ## 9. Siguientes pasos sugeridos
 
-1. Re-verificar login completo con la build parcheada.
-2. Si `AudioManager.requestAudioFocus(AudioFocusRequest)` revienta: redirigir a la sobrecarga de API 8 (`requestAudioFocus(OnAudioFocusChangeListener, int, int)`).
-3. Si `VibrationEffect` reaparece por otra ruta (`Notification.defaults`, `AudioAttributes`), ampliar `nbrt.compat.Notif`.
-4. Eliminar del APK final las ABIs no-x86 y los recursos `*-v26` no usados (reduce ~40 MB a ~15 MB).
-5. Comprobar `AudioTrack`/códecs: en x86 sin NEON el playback usa rutas software; puede necesitar ajustar el buffer.
+1. Probar reproducción real (Bluetooth/A2DP y altavoz) y anotar si suena.
+2. Si `VibrationEffect` reaparece por otra ruta (`Notification.defaults`, `AudioAttributes`), ampliar `nbrt.compat.Notif`.
+3. Comprobar `AudioTrack`/códecs: en x86 sin NEON el playback usa rutas software; puede necesitar ajustar el buffer.
+4. Mitigar los reinicios del watchdog: `scripts/spotify-sleep.sh` (WiFi off + force-stop) y `scripts/debloat.sh` (apps de Google que sobran). Ver §10.
 
 ---
 
@@ -244,14 +287,19 @@ que ya existían (se reiniciaba igual sin Spotify instalado).
 
 ### 10.3 Qué se puede hacer (de más a menos efectivo)
 
-1. **No dejar sockets abiertos al dormir**: modo *Offline* (descargas) o cerrar Spotify con
+1. **Modo dormir automático**: `./scripts/spotify-sleep.sh on` cierra Spotify y apaga la
+   WiFi de una vez; `off` lo revierte (WiFi + abrir la app). Es el punto 1 + 2 juntos.
+2. **No dejar sockets abiertos al dormir**: modo *Offline* (descargas) o cerrar Spotify con
    `adb shell am force-stop com.spotify.music` antes de quitarte el reloj. Con la app cerrada
    se liberan ~70 MB y desaparecen los temporizadores TCP.
-2. **WiFi apagada cuando no escuches** (solo Bluetooth): sin red no hay `ipt_do_table`
+3. **WiFi apagada cuando no escuches** (solo Bluetooth): sin red no hay `ipt_do_table`
    ni `dhd_dpc` en el suspend.
-3. **Liberar RAM**: cuantas menos cosas corran de fondo (GMS, watchfaces, apps), menos
-   probable es el fallo de asignación de páginas.
-4. Arreglo de verdad: kernel/ROM parcheado (fuera del alcance de este repo).
+4. **Liberar RAM**: `./scripts/debloat.sh disable` apaga las apps de Google prescindibles
+   (app Google, Play Music, Traducir, teclado manuscrito, demo de tienda, tutorial,
+   bugreportsender; con `--with-optional`, también Fit, TTS y Recordatorios). Reversible con
+   `./scripts/debloat.sh restore`. En el NBRiq ya estaban casi todas desactivadas y el
+   `MemAvailable` ronda 170 MB con Spotify abierto.
+5. Arreglo de verdad: kernel/ROM parcheado (fuera del alcance de este repo).
 
 ### 10.4 Cómo comprobarlo en tu reloj
 
@@ -271,4 +319,49 @@ traduce el stack a lenguaje claro. Requiere `adb`; con root (Magisk) da el infor
   al mantener pulsado el botón de encendido): eso solo reinicia `system_server`, no el reloj,
   y es otro bug conocido del ROM. Ver `docs/FINDINGS.md` y el issue del repo si quieres
   evitarlo: no dejes pulsado el botón de encendido.
+
+---
+
+## 11. Cambiar el APK sin perder la sesión (con root)
+
+El APK que quedó instalado en el reloj se firmó con otra clave (se regeneró
+`tools/debug.jks` después), así que `adb install -r` falla con
+`INSTALL_FAILED_UPDATE_INCOMPATIBLE` y habría que desinstalar → perder el login.
+Con root se puede hacer sin perder nada: `scripts/reinstall-keep-data.sh`.
+
+Lo que costó descubrir (todo comprobado en el NBRiq, Magisk viejo + Android 7.1.1):
+
+| Tropiezo | Síntoma | Solución |
+|---|---|---|
+| `tar -xzf` en el reloj | `tar: exec gunzip: No such file or directory` | el toybox `tar` **crea** `.tgz` pero no lo extrae; descomprimir en el Mac y copiar el árbol |
+| `cp -a` | `cp: /data/data/com.spotify.music: Permission denied` | `-a` intenta restaurar el contexto SELinux del origen; usar `cp -r` y luego `restorecon` |
+| `su -c` no escribe | `chmod`/`touch` → `Permission denied`, sin `avc: denied` nuevo en dmesg | en esta ROM `su -c` ejecuta en el dominio **`shell`**, no en `magisk`; con `magiskpolicy --live` se le dan permisos |
+| `su -c 'id'` dice root pero `chmod` falla | `scontext=u:r:shell:s0` en el AVC | comprobar siempre `id -Z`, no solo `id` |
+| `adb push` de un symlink | `failed to copy ... Is a directory` | quitar `lib` del árbol (es un enlace absoluto a `/data/app/...`, se recrea) |
+
+Reglas mínimas (van en el script, **no persisten**: se pierden al reiniciar):
+
+```sh
+/data/adb/magisk/magiskpolicy --live \
+  'allow shell system_data_file dir { create write read search setattr add_name remove_name rmdir }' \
+  'allow shell system_data_file file { create write read getattr setattr unlink rename }' \
+  'allow shell app_data_file dir { create write read search setattr add_name remove_name rmdir }' \
+  'allow shell app_data_file file { create write read getattr setattr unlink rename }'
+```
+
+> Ojo con la sintaxis: este `magiskpolicy` quiere `allow <src> <tgt> <clase> { perms }`
+> (sin `:` entre tipo y clase) y no acepta `file`/`dir` como *tipos*.
+
+Orden que funciona:
+
+1. `su -c 'tar -czf /sdcard/d.tgz -C /data/data com.spotify.music'` (esto sí funciona) y `adb pull`.
+2. `pm uninstall` + `adb install` del APK nuevo.
+3. Descomprimir en el Mac, quitar `lib`, `adb push` a `/data/local/tmp/spdata/`.
+4. `cp -r` a `/data/data/`, recrear `lib` → `$(dirname $(pm path ...))/lib/x86`,
+   `chown -R <uid>:<uid>`, `chmod 771`, `restorecon -R`.
+5. `am start` y comprobar: la home debe mostrar "Good morning" + tus playlists
+   (así se verificó que el login sobrevive a la reinstalación).
+
+Resultado real en el NBRiq: APK de 41,7 MB → **16 MB** (solo `lib/x86`), sesión intacta.
+
 
