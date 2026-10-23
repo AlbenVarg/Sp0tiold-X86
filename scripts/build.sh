@@ -50,6 +50,7 @@ python3 "$HERE/scripts/patch_minsdk.py" "$SRC" "$WORK/step1-minsdk.apk" "$TARGET
 step "2/6 clases de desugar (java.time / java.nio.file -> nbrt/*)"
 python3 "$HERE/scripts/build_desugar.py" "$DESUGAR_JAR" "$WORK/desugar-subset.jar"
 rm -rf "$WORK/dexout"
+mkdir -p "$WORK/dexout"
 "$BT/d8" --min-api "$TARGET_SDK" --output "$WORK/dexout" "$WORK/desugar-subset.jar"
 
 # ------------------------------------------------------------- 3) baksmali
@@ -66,15 +67,26 @@ find "$WORK/smali" -name '*.smali' -print0 | xargs -0 perl -pi -e \
   's{Ljava/time/}{Lnbrt/time/}g; s{Ljava/nio/file/}{Lnbrt/nio/file/}g'
 python3 "$HERE/scripts/patch_smali.py" "$WORK/smali"
 
-# comprobacion: no deben quedar simbolos de API 26+
+# comprobacion: no deben quedar simbolos de API 26+ (grep devuelve 1 si no
+# encuentra nada; con pipefail eso mataria el script, de ahi el "|| true")
 LEFTOVER=0
-for sym in 'Landroid/os/VibrationEffect;->' 'startForegroundService' \
-           'NotificationManager;->getNotificationChannel' 'Landroid/app/NotificationChannel;' ; do
-  n=$(grep -rl -- "$sym" "$WORK/smali" 2>/dev/null | wc -l | tr -d ' ')
-  # NotificationChannel solo puede aparecer como tipo de retorno del helper
-  [ "$sym" = 'Landroid/app/NotificationChannel;' ] && n=$(( n > 3 ? n : 0 ))
-  if [ "$n" != "0" ]; then echo "  AVISO: quedan $n ficheros con $sym"; LEFTOVER=1; fi
-done
+check_sym() {  # check_sym <simbolo> <maximo_permitido>
+  local sym="$1" max="${2:-0}" n
+  n=$(grep -rl -- "$sym" "$WORK/smali" 2>/dev/null | wc -l) || true
+  n=$(echo "$n" | tr -d ' ')
+  if [ "$n" -gt "$max" ]; then
+    echo "  AVISO: quedan $n ficheros con $sym (max esperado: $max)"
+    LEFTOVER=1
+  fi
+  return 0
+}
+check_sym 'Landroid/os/VibrationEffect;->'
+check_sym 'startForegroundService'
+check_sym 'NotificationManager;->getNotificationChannel'
+# NotificationChannel como tipo solo debe quedar en el helper y en las 3 lineas
+# invoke-static que lo usan como tipo de retorno (ForegroundMediaService,
+# DownloadWorkerImpl, Q3/d)
+check_sym 'Landroid/app/NotificationChannel;' 4
 
 # ------------------------------------------------------------- 5) smali
 step "5/6 reensamblado (smali, api $TARGET_SDK)"

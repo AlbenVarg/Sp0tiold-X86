@@ -4,6 +4,8 @@
 
 El cliente de Wear OS moderno exige `minSdkVersion 28` (Android 9). Este repo documenta y automatiza el parcheo necesario para hacerlo arrancar, iniciar sesión y reproducir en un reloj de 2017 con **API 25 / x86 (i386)**.
 
+> 🧸 **¿Solo quieres instalarlo y no te interesa el cómo?** → **[Guía fácil paso a paso (para dummies)](README-SIMPLE.md)**
+
 > **Estado: funcional en fase de pruebas.** Arranca, genera código de emparejamiento y completa el login. Quedan por verificar home/biblioteca y reproducción (ver [Pendiente](#pendiente)).
 
 ---
@@ -11,6 +13,7 @@ El cliente de Wear OS moderno exige `minSdkVersion 28` (Android 9). Este repo do
 ## TL;DR
 
 ```bash
+./scripts/setup.sh                                  # una sola vez: baja las herramientas
 ./scripts/build.sh "com.spotify.music_9.0.40.386-..._minAPI28(x86).apk"
 # -> build/spotify-wear-api25.apk  (minSdk 25, desugared, firmado)
 adb install -r build/spotify-wear-api25.apk
