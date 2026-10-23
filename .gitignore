@@ -1,0 +1,18 @@
+# artefactos de build
+build/
+*.apk
+*.dex
+*.jar
+!tools/.gitkeep
+tools/*.jar
+tools/*.jks
+tools/*.keystore
+
+# salida de smali/baksmali
+smali-out/
+*.smali.bak
+
+# sistema
+.DS_Store
+__pycache__/
+*.pyc
