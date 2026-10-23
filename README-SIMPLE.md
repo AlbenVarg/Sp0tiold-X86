@@ -111,12 +111,12 @@ Un solo comando:
 Tarda **3-5 minutos**. Verás seis pasos:
 
 ```
-==> 1/6 minSdkVersion -> 25           (le dice al reloj "vale, te acepto")
-==> 2/6 clases de desugar             (le enseña cosas de Android 9)
-==> 3/6 baksmali del classes.dex      (desmonta la app en trocitos de texto)
-==> 4/6 helper + call sites API 26+   (cambia lo que Android 7 no entiende)
-==> 5/6 reensamblado                  (la vuelve a montar)
-==> 6/6 repack + zipalign + apksigner (la firma para que se pueda instalar)
+==> 1/6 minSdkVersion -> 25                    (le dice al reloj "vale, te acepto")
+==> 2/6 clases de desugar (java.time / java.nio.file -> nbrt/*)
+==> 3/6 baksmali del classes.dex               (desmonta la app en trocitos de texto)
+==> 4/6 helper nbrt.compat.Notif + renombrado + call sites API 26+
+==> 5/6 reensamblado (smali, api 25)           (la vuelve a montar)
+==> 6/6 repack + zipalign + apksigner          (la firma para que se pueda instalar)
 ```
 
 Si termina con:
@@ -150,6 +150,8 @@ OK -> .../build/spotify-wear-api25.apk
    ```bash
    adb shell am start -n com.spotify.music/com.spotify.wear.main.MainActivity
    ```
+
+> 🔑 Si algún día **reconstruyes el APK en otro ordenador**, se firmará con otra clave distinta, así que antes tendrás que hacer `adb uninstall com.spotify.music`. Y ojo: desinstalar **borra la sesión**, tendrás que emparejar de nuevo.
 
 ---
 
