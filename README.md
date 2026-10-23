@@ -6,7 +6,7 @@ El cliente de Wear OS moderno exige `minSdkVersion 28` (Android 9). Este repo do
 
 > 🧸 **¿Solo quieres instalarlo y no te interesa el cómo?** → **[Guía fácil paso a paso (para dummies)](README-SIMPLE.md)**
 
-> **Estado: funciona.** En un NBRiq real (x86, Android 7.1.1): arranca, empareja, inicia sesión, **se conserva el login al reinstalar**, carga home/biblioteca/buscador y **reproduce** (`state=3`, con el audio focus concedido por la vía antigua: `Y5.c`). Capturas del reloj en [`docs/img/`](docs/img/). Lo único sin verificar es el **sonido audible**: el reloj no tiene altavoz utilizable y Spotify pide un dispositivo Bluetooth.
+> **Estado: funciona, incluido el sonido.** En un NBRiq real (x86, Android 7.1.1): arranca, empareja, inicia sesión, **se conserva el login al reinstalar**, carga home/biblioteca/buscador y **reproduce con audio audible** (`state=3`, audio focus concedido por la vía antigua: `Y5.c`). Capturas del reloj en [`docs/img/`](docs/img/).
 
 ---
 
@@ -262,10 +262,6 @@ Los tres riesgos de API 26+ que quedaban **ya están resueltos o descartados con
 
 Lo que queda por probar:
 
-- **Sonido audible**: la reproducción funciona (`state=3`, posición avanzando, focus
-  concedido), pero el NBRiq no tiene altavoz utilizable (Spotify abre los ajustes de
-  Bluetooth al elegir "This watch"). Con auriculares emparejados hay que confirmar que se
-  oye y que no aparecen errores de `AudioTrack`.
 - Ajuste fino del buffer de `AudioTrack` en x86 sin NEON (solo si se oyen cortes).
 - A/B de estabilidad del watchdog: una noche con `spotify-sleep.sh on` vs una normal,
   comparando el número de arranques con `./scripts/diag-reboot.sh`.

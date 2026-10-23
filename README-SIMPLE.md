@@ -177,7 +177,8 @@ Capturas de un NBRiq real (x86, Android 7.1.1) con el APK parcheado:
 | ![Biblioteca](docs/img/04-pagina.png) | ![Canciones](docs/img/07-canciones.png) | ![Buscar](docs/img/12-resultados.png) |
 
 Si ves la carátula, el tiempo avanzando y la lista de canciones, **está funcionando**.
-Para oírlo necesitas unos auriculares Bluetooth: el reloj no tiene altavoz.
+Para oírlo necesitas unos auriculares Bluetooth (el reloj no tiene altavoz) — comprobado
+que suena.
 
 ---
 

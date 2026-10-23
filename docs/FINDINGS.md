@@ -257,7 +257,8 @@ adb logcat -d | grep -E 'FATAL|NoSuchMethod|NoClassDefFound|VerifyError'
 | Sobrevive al login (crash `NotificationChannel`) | ✅ verificado en el reloj |
 | Home / biblioteca | ✅ cargan ("Good morning", Liked Songs, playlists) |
 | Sesión conservada tras reinstalar el APK slim | ✅ (ver §11) |
-| Reproducción | ✅ `state=3` (PLAYING) con audio focus en `Y5.c`; posición avanza. Capturas en [`docs/img/`](docs/img/) |
+| Reproducción | ✅ `state=3` (PLAYING) con audio focus en `Y5.c`; posición avanza y **suena** (confirmado por el usuario). Capturas en [`docs/img/`](docs/img/) |
+| Sonido audible | ✅ confirmado escuchando en el reloj |
 | APK slim (solo x86) | ✅ `KEEP_ABIS=x86`, 41,7 MB → 16 MB, instalado |
 | Apps de Google prescindibles | ✅ desactivadas (`scripts/debloat.sh`) |
 
