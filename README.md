@@ -8,6 +8,9 @@ El cliente de Wear OS moderno exige `minSdkVersion 28` (Android 9). Este repo do
 
 > **Estado: funciona, incluido el sonido.** En un NBRiq real (x86, Android 7.1.1): arranca, empareja, inicia sesión, **se conserva el login al reinstalar**, carga home/biblioteca/buscador y **reproduce con audio audible** (`state=3`, audio focus concedido por la vía antigua: `Y5.c`). Capturas del reloj en [`docs/img/`](docs/img/).
 
+> El otro proyecto de la misma sesión (root y optimización del reloj) vive aparte:
+> [RootNbrIQ_X86](https://github.com/AlbenVarg/RootNbrIQ_X86).
+
 ---
 
 ## TL;DR

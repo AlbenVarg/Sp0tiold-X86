@@ -78,6 +78,10 @@ com.spotify.music_9.0.40.386-127404690_minAPI28(arm64-v8a,armeabi-v7a,x86,x86_64
 
 Búscalo en APKMirror como *Spotify: Music and Podcasts* → versión **9.0.40.386** → variante **Wear OS**.
 
+> 📁 Si ya lo bajaste en esta máquina, está en la carpeta **`apk-base/`** del proyecto
+> (junto a las versiones 8.4.84 de prueba). Esa carpeta **no se sube a git** (los APK
+> pesan demasiado), así que sigue siendo cosa tuya conservarla.
+
 > ⚠️ **Tiene que ser la de Wear OS**, no la del móvil. Y tiene que incluir **x86** entre las arquitecturas.
 
 Comprueba que es la buena:
